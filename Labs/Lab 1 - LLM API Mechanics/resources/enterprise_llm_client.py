@@ -6,6 +6,7 @@ import time
 import logging
 from dotenv import load_dotenv
 from filing_classifier import load_all_filings
+import random
 
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
@@ -64,82 +65,88 @@ class EnterpriseLLMClient:
         temperature: float = 0.0,
         max_tokens: int = 500,
     ) -> LLMResponse:
+
+        # a. Pre-call token validation
         total_tokens = sum(len(self.encoder.encode(msg['content'])) + 4 for msg in messages)
-        context_limit = 128_000
-        if total_tokens > context_limit:
-            raise ValueError(f"Token count {total_tokens} exceeds context window limit of {context_limit}")
-        estimated_cost = (total_tokens / 1_000_000) * self.PRICING['gpt-4o-mini']['input']
+        if total_tokens > 128_000:
+            raise ValueError(f"Token count {total_tokens} exceeds context window limit of 128,000")
+
+        # b. Budget enforcement
+        pricing = self.PRICING.get(self.model, self.PRICING["gpt-4o-mini"])
+        estimated_cost = (total_tokens / 1_000_000) * pricing["input"]
         if self._cumulative_cost + estimated_cost > self.budget_limit_usd:
-            raise BudgetExceededError(f"Budget exceeded - spent ${self._cumulative_cost} of " + 
-                f"${self.budget_limit_usd} limit estimated cost would be ${estimated_cost}")
-        try:
-            total_tokens=0
-            cumulative_cost=0
-            for msg in messages:
-                total_tokens += len(self.encoder.encode(msg['content']))
-                cumulative_cost += len(self.encoder.encode(msg['content'])) * self.PRICING['gpt-4o-mini']['input']
-                if total_tokens > 128_000:
-                    raise ValueError("Too many tokens")
-                elif cumulative_cost > self.budget_limit_usd:
-                    raise BudgetExceededError(f"")
-        except (ValueError, BudgetExceededError) as e:
-            print(e)
-        
+            raise BudgetExceededError(
+                f"Budget limit ${self.budget_limit_usd} reached after ${self._cumulative_cost:.6f} spent"
+            )
+
+        # c. Retry loop — ONLY the API call goes here
+        response = None
+        latency_ms = 0.0
+
         for attempt in range(self.max_retries):
             try:
                 start = time.time()
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    response_format={"type": "json_object"},
                     temperature=temperature,
                     max_tokens=max_tokens
                 )
                 latency_ms = (time.time() - start) * 1000
-                break  # success — exit the retry loop
+                break  # success — exit retry loop
+
             except RateLimitError:
                 if attempt == self.max_retries - 1:
                     raise
-                wait = (2 ** attempt) + random.uniform(0, 1)  # exponential + jitter
+                wait = (2 ** attempt) + random.uniform(0, 1)
                 logger.warning(f"Rate limited. Retry {attempt + 1}/{self.max_retries} in {wait:.1f}s")
                 time.sleep(wait)
+
             except APIStatusError as e:
                 if e.status_code in (400, 401, 403):
-                    raise  # client errors — never retry
+                    raise
                 if attempt == self.max_retries - 1:
                     raise
                 wait = (2 ** attempt) + random.uniform(0, 1)
                 logger.warning(f"Server error {e.status_code}. Retry {attempt + 1}/{self.max_retries}")
                 time.sleep(wait)
+
             except APIConnectionError:
                 if attempt == self.max_retries - 1:
                     raise
                 time.sleep(2 ** attempt)
-            input_tokens = response.usage.prompt_tokens
-            output_tokens = response.usage.completion_tokens
-            actual_cost = (
-                (input_tokens  / 1_000_000) * self.PRICING["gpt-4o-mini"]["input"] +
-                (output_tokens / 1_000_000) * self.PRICING["gpt-4o-mini"]["output"]
-                )
-            self._cumulative_cost += actual_cost
 
-            llm_response = LLMResponse(
-                content=response.choices[0].message.content,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                latency_ms=latency_ms,
-                model=self.model,
-                use_case=use_case,
-                cost_usd=actual_cost
-            )
+        # d. Log and track — OUTSIDE the for loop ✅
+        if response is None:
+            raise RuntimeError("All retry attempts failed")
 
-            self._call_log.append(llm_response)
+        input_tokens = response.usage.prompt_tokens
+        output_tokens = response.usage.completion_tokens
+        actual_cost = (
+            (input_tokens  / 1_000_000) * pricing["input"] +
+            (output_tokens / 1_000_000) * pricing["output"]
+        )
 
-            logger.info(
-                f"{use_case} | {response.usage.total_tokens} tokens | "
-                f"${actual_cost:.4f} | {latency_ms:.0f}ms"
-                )
-            return llm_response
+        self._cumulative_cost += actual_cost
+
+        llm_response = LLMResponse(
+            content=response.choices[0].message.content,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_ms=latency_ms,
+            model=self.model,
+            use_case=use_case,
+            cost_usd=actual_cost
+        )
+
+        self._call_log.append(llm_response)
+
+        logger.info(
+            f"{use_case} | {response.usage.total_tokens} tokens | "
+            f"${actual_cost:.4f} | {latency_ms:.0f}ms"
+        )
+
+        return llm_response
         
     def get_cost_report(self) -> CostReport:
             if not self._call_log:
@@ -202,16 +209,16 @@ if __name__ == "__main__":
 
     print("\n=== Cost Report ===")
     report = client.get_cost_report()
-    print(f"Total Calls:    {report.total_calls}")
-    print(f"Total Tokens:   {report.total_tokens}")
-    print(f"Total Cost:     ${report.total_cost_usd:.6f}")
-    print(f"Avg Latency:    {report.avg_latency_ms:.0f}ms")
-    print(f"\nBy Use Case:")
+    print(f"  Total calls:    {report.total_calls}")
+    print(f"  Total tokens:   {report.total_tokens:,}")  # comma formatting
+    print(f"  Total cost:     ${report.total_cost_usd:.4f}")
+    print(f"  Avg latency:    {report.avg_latency_ms:.0f}ms")
+    print(f"\n  By use case:")
     for use_case, stats in report.by_use_case.items():
-        print(f"  {use_case}: {stats['calls']} calls | {stats['tokens']} tokens | ${stats['cost']:.6f}")
+        print(f"    {use_case}:  ${stats['cost']:.4f}  ({stats['calls']} calls)")
 
     # --- Test 2: budget enforcement ---
-    print("\n=== Budget Enforcement Test ===")
+    print("\n=== Budget Test ===")
     tiny_budget_client = EnterpriseLLMClient(budget_limit_usd=0.0001)
     try:
         for i in range(3):
@@ -222,6 +229,6 @@ if __name__ == "__main__":
                 ],
                 use_case="budget_test"
             )
-            print(f"Call {i+1} succeeded")
+            print(f"  Call {i+1} succeeded")
     except BudgetExceededError as e:
-        print(f"BudgetExceededError caught as expected: {e}")
+        print(f"  BudgetExceededError: {e}")
