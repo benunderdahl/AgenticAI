@@ -1,0 +1,80 @@
+COMPLIANCE REVIEW: Meridian Technologies 10-K Filing (FY 2024)
+
+ITEM 1: BUSINESS
+Meridian Technologies is a cybersecurity services company with 12,000
+employees across 8 countries (US, UK, Germany, Singapore, India, Brazil,
+Japan, Australia). Revenue: $3.2B (FY 2024). The Company classifies as
+a "large accelerated filer."
+
+The Company's product lines include:
+- MeridianShield: Enterprise endpoint protection platform
+- MeridianAI: AI-powered threat detection and response
+- MeridianCloud: Cloud security posture management
+- MeridianGRC: Governance, risk, and compliance automation
+
+Approximately 40% of revenue is generated outside the United States,
+primarily in EUR, GBP, and SGD denominated contracts.
+
+ITEM 1A: RISK FACTORS
+The Company identifies 14 risk factors, including:
+- Cybersecurity breach risk (detailed, 2 pages) — describes potential impact
+  of a security incident on the Company's reputation and customer base, with
+  specific mention of prior incidents in the industry.
+- Key personnel retention (1 paragraph) — states only "we may lose key
+  employees to competitors, which could adversely affect our business."
+  No specifics on mitigation strategies or current turnover metrics.
+- Regulatory compliance across jurisdictions (1 page) — discusses GDPR,
+  CCPA, and Singapore PDPA requirements.
+- Supply chain concentration (half page) — notes reliance on three
+  cloud infrastructure providers.
+
+NOTABLE OMISSIONS:
+- NO mention of climate-related risks (despite SEC climate disclosure
+  requirements for large accelerated filers taking effect)
+- NO mention of AI/ML governance risks despite the MeridianAI product line
+  being a significant and growing revenue source ($380M, 12% of total)
+
+ITEM 7: MANAGEMENT'S DISCUSSION AND ANALYSIS
+Revenue grew 18% YoY from $2.71B to $3.20B.
+Cloud security segment (MeridianCloud) grew 34%.
+MeridianAI segment grew 28% to $380M.
+
+Gross margin declined from 62% to 58% due to increased infrastructure costs.
+The MD&A states: "Gross margins declined due to infrastructure investments"
+but does NOT discuss:
+- The margin decline's expected trajectory or whether it is temporary
+- Root cause analysis beyond the one-sentence attribution
+- Impact of the recently enacted EU Cyber Resilience Act on operations
+  and compliance costs (despite the Company operating in the EU)
+- Currency translation effects on international revenue (despite 40%
+  of revenue being international with significant EUR/GBP exposure)
+
+SG&A increased 22% ($640M to $781M), outpacing revenue growth.
+No explanation provided for the SG&A increase rate exceeding revenue growth.
+
+ITEM 9A: INTERNAL CONTROLS OVER FINANCIAL REPORTING
+Management asserts effective internal controls over financial reporting.
+The auditor's report concurs. No material weaknesses identified.
+One significant deficiency noted: "Certain IT general controls over the
+MeridianGRC platform require enhancement" — no further detail provided.
+
+CEO CERTIFICATION (SOX 302):
+Signed by CEO Sarah Chen, dated March 15, 2025.
+
+CFO CERTIFICATION (SOX 302):
+Signed by CFO David Park, dated March 15, 2025.
+NOTE: David Park was appointed interim CFO on January 1, 2025,
+following the departure of previous CFO Maria Rodriguez on December 31, 2024.
+Maria Rodriguez departed to "pursue other opportunities." No separation
+agreement or severance terms were disclosed.
+
+The 8-K reporting the CFO change was filed January 12, 2025.
+This is 8 business days after the effective date of the change.
+The SEC requires 8-K filings within 4 business days of a triggering event
+(Rule 13a-11 under the Securities Exchange Act of 1934).
+
+AUDITOR'S REPORT:
+Clean opinion from Ernst & Young LLP.
+Audit completed February 28, 2025.
+Audit fees: $8.2M (up from $7.1M prior year, a 15% increase).
+No disagreements with management reported.

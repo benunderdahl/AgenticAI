@@ -1,8 +1,21 @@
 from pydantic import BaseModel, ValidationError
 import json
-from openai import OpenAI
+from openai import OpenAI, AzureOpenAI
 from starter import load_all_filings
 import tiktoken as tt
+import os
+from dotenv import load_dotenv
+
+
+PRICING = {
+    "gpt-4o":             {"input": 2.50, "output": 10.00},   # USD per 1M tokens
+    "claude-3.5-sonnet":  {"input": 3.00, "output": 15.00},
+}
+
+MODEL_LIMITS = {
+    "gpt-4o":            {"context_window": 128_000},
+    "claude-3.5-sonnet": {"context_window": 200_000},
+}
 
 
 class FilingClassification(BaseModel):
@@ -14,13 +27,14 @@ class FilingClassification(BaseModel):
    
 
    
-def classify_filing(text: str, temperature: float, client: OpenAI) -> FilingClassification:
+def classify_filing(text: str, temperature: float, client: AzureOpenAI) -> FilingClassification:
     messages = [
         {
             "role": "system",
             "content": (
                 "Classify SEC filings and return ONLY JSON with:\n"
-                "filing_type, confidence, company_name, primary_sector, reasoning"
+                "filing_type (str), confidence (float between 0.0 and 1.0, NOT words like 'high'), "
+                "company_name (str), primary_sector (str), reasoning (str, one sentence)"
             )
         },
         {
@@ -31,7 +45,7 @@ def classify_filing(text: str, temperature: float, client: OpenAI) -> FilingClas
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1-nano",
             messages=messages,
             response_format={"type": "json_object"},
             temperature=temperature,
@@ -48,7 +62,12 @@ def classify_filing(text: str, temperature: float, client: OpenAI) -> FilingClas
 
 
 def experiment_runner():
-    client = OpenAI()
+    load_dotenv()
+    client = AzureOpenAI(
+        api_key=os.getenv("AZURE_OPENAI_KEY"),
+        api_version=os.getenv("AZURE_API_VERSION"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+    )
     filings = load_all_filings()
 
     # sample 5 unique filing types
@@ -67,6 +86,7 @@ def experiment_runner():
     print("Temperature Experiment Results")
     print("==============================================")
     print("Temp  | Consistency | Avg Tokens | Avg Cost")
+    print("----------------------------------------------")
 
     encoder = tt.encoding_for_model("gpt-4o")
 
@@ -105,7 +125,7 @@ def experiment_runner():
 
         print(
             f"{temp:<5} | "
-            f"{int(consistency * 100):>5}%       | "
+            f"{int(consistency * 100):>5}%      | "
             f"{int(avg_tokens):>6}     | "
             f"${avg_cost:.6f}"
         )
