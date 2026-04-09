@@ -17,7 +17,7 @@ load_dotenv()
 
 # --- Configuration ---
 
-DATA_DIR = Path(__file__).parent / "../../Lab 01 - LLM API Mechanics/resources/sec-filings"
+DATA_DIR = Path(__file__).parent  / "sec-filings"
 DATA_DIR = DATA_DIR.resolve()
 
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")

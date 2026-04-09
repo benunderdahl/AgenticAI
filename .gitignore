@@ -1,3 +1,4 @@
 .env
 *.venv
 Labs/Lab*1*-*LLM*API*Mechanics/resources/sec-filings/*
+**/sec-filings
