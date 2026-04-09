@@ -17,7 +17,7 @@ Requires:
 """
 
 import time
-
+import os
 from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
@@ -28,12 +28,11 @@ load_dotenv()
 
 model = AzureChatOpenAI(
     azure_deployment="gpt-4.1-nano",
-    azure_endpoint="https://20260330vanguardai.cognitiveservices.azure.com/",
-    api_key="Baim0uLJi4k1gjWa4kdeZFpzAdmmv59uHH47YfqqwVN8q9cZh5h7JQQJ99CDACYeBjFXJ3w3AAAAACOGqYh0",
+    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+    api_key=os.getenv("AZURE_OPENAI_KEY"),
     api_version="2024-12-01-preview",
     temperature=0,
 )
-
 
 class DocumentClassification(BaseModel):
     document_type: str = Field(
