@@ -100,6 +100,34 @@ def call_llm(
         response.usage.completion_tokens,
     )
 
+def call_llm_few(
+    system_prompt: str,
+    user_message: str,
+    temperature: float = 0.0,
+    max_tokens: int = 500,
+    extra_messages: list[dict] | None = None,  # ← add this
+) -> tuple[str, int, int]:
+    """Make an LLM call and return (content, input_tokens, output_tokens)."""
+    
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    if extra_messages:
+        messages.extend(extra_messages)  
+        
+    messages.append({"role": "user", "content": user_message})
+    
+    response = client.chat.completions.create(
+        model=AZURE_OPENAI_DEPLOYMENT,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    content = response.choices[0].message.content or ""
+    return (
+        content,
+        response.usage.prompt_tokens,
+        response.usage.completion_tokens,
+    )
 
 def parse_json_response(content: str) -> dict | None:
     """Parse LLM output as JSON, stripping markdown fences if present."""

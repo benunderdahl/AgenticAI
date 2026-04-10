@@ -93,10 +93,10 @@ FEW_SHOT_EXAMPLES = [
         "paid to our Named Executive Officers in fiscal 2023 is described in the Summary Compensation Table on page 42."
     },
     {
-        "role": "assistant",
-        "content": '{"'
+        "role": "assistant", "content": '{"'
         'filing_type": "DEF 14A", '
-        '"confidence": 0.95, "evidence": ["proxy statement", "advisory vote on executive compensation", "Named Executive Officers", "Annual Meeting of Shareholders"], '
+        '"confidence": 0.95, '
+        '"evidence": ["proxy statement", "advisory vote on executive compensation", "Named Executive Officers", "Annual Meeting of Shareholders"], '
         '"ambiguity_notes": null}'
     },
 
@@ -155,16 +155,32 @@ def classify_zero_shot(content: str) -> ClassificationResult:
             model='gpt-4.1-nano',
             messages=messages,
             response_format={"type": "json_object"},
-            temperature=0.95
+            temperature=0.0,
+            max_tokens=500
         )
         data = parse_json_response(response.choices[0].message.content)
-        print(data)
         return ClassificationResult(**data)
     except:
         print("error")
 
 def classify_few_shot(content: str) -> ClassificationResult:
-    ...
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        *FEW_SHOT_EXAMPLES,
+        {"role": "user", "content": content}
+    ]
+    try: 
+        response = agent.chat.completions.create(
+            model='gpt-4.1-nano',
+            messages=messages,
+            response_format={"type": "json_object"},
+            temperature=0.0,
+            max_tokens= 500
+        )
+        data = parse_json_response(response.choices[0].message.content)
+        return ClassificationResult(**data)
+    except:
+        print("error")
 
 
 
@@ -172,12 +188,90 @@ def classify_few_shot(content: str) -> ClassificationResult:
 if __name__ == "__main__":
 
     filings = load_filings()
+    total = len(filings)
+    zero_correct = 0
+    few_correct = 0
+    zero_total_input = 0
+    zero_total_output = 0
+    few_total_input = 0
+    few_total_output = 0
+    overhead_samples = []
+
+    print("CLASSIFICATION: Zero-Shot vs. Few-Shot")
+    print("=" * 40)
     for f in filings:
+
+        few_output = 0
         expected = f['filing_type']
-        result = classify_zero_shot(f['content'])
-        print(f"Expected: {expected}")
-        if result.filing_type is not None:
-            print(f"Result type: {result.filing_type}")
-            print("=" * 40)
-        else: 
-            print("Result: None")
+        filename = f['filename']
+
+        z_content, z_input, z_output = call_llm(SYSTEM_PROMPT, f['content'])
+        f_content, f_input, f_output = call_llm_few(SYSTEM_PROMPT, f['content'], extra_messages=FEW_SHOT_EXAMPLES)
+        f_data = parse_json_response(f_content)
+        z_data = parse_json_response(z_content)
+        f_result = ClassificationResult(**f_data)
+        z_result = ClassificationResult(**z_data)
+        zero_type = z_result.filing_type if z_result else "ERROR"
+        few_type = f_result.filing_type if f_result else "ERROR"
+
+        zero_ok = zero_type == expected
+        few_ok = few_type == expected
+
+        # token tracking 
+        zero_total_input += z_input
+        zero_total_output += z_output
+        few_total_input += f_input
+        few_total_output += f_output
+        overhead_samples.append(f_input - z_input)
+        if zero_ok:
+            zero_correct += 1
+        if few_ok:
+            few_correct += 1
+
+        print(
+            f"  {filename:<40} expected={expected:<10} "
+            f"zero={zero_type:18} {'OK  ' if zero_ok else 'MISS'}| "
+            f"few={few_type:<10} {'OK' if few_ok else 'MISS'}"
+        )
+
+    print()
+    print(f"  Zero-shot accuracy: {zero_correct}/{total} ({int(zero_correct/total*100)}%)")
+    print(f"  Few-shot accuracy:  {few_correct}/{total} ({int(few_correct/total*100)}%)")
+    print("=" * 40)
+    avg_overhead = int(sum(overhead_samples) / len(overhead_samples))
+    zero_cost = estimate_cost(zero_total_input, zero_total_output)
+    few_cost = estimate_cost(few_total_input, few_total_output)
+    zero_cost_per = zero_cost / total
+    few_cost_per = few_cost / total
+    overhead_multiplier = few_cost / zero_cost if zero_cost > 0 else 0
+
+    scale = 10_000
+    zero_monthly = zero_cost_per * scale
+    few_monthly = few_cost_per * scale
+    diff_monthly = few_monthly - zero_monthly
+    zero_misses = int((1 - zero_correct / total) * scale)
+    few_misses = int((1 - few_correct / total) * scale)
+    accuracy_gain = int((few_correct - zero_correct) / total * 100)
+    cost_increase = int((overhead_multiplier - 1) * 100)
+
+    print()
+    print("FEW-SHOT COST ANALYSIS")
+    print("======================")
+    print(f"Per-filing overhead:   +{avg_overhead} input tokens (the few-shot examples)")
+    print()
+    print(f"                       {'Zero-Shot':<16} {'Few-Shot'}")
+    print(f"Corpus input tokens:   {zero_total_input:<16,} {few_total_input:,}")
+    print(f"Corpus output tokens:  {zero_total_output:<16,} {few_total_output:,}")
+    print(f"Corpus total cost:     ${zero_cost:<15.4f} ${few_cost:.4f}")
+    print(f"Cost per filing:       ${zero_cost_per:<15.6f} ${few_cost_per:.6f}")
+    print(f"Overhead multiplier:   1.00x           {overhead_multiplier:.2f}x")
+    print()
+    print(f"PROJECTION @ {scale:,} filings/month:")
+    print(f"  Zero-shot:  ${zero_monthly:.2f}/month")
+    print(f"  Few-shot:   ${few_monthly:.2f}/month")
+    print(f"  Difference: ${diff_monthly:.2f}/month")
+    print()
+    print("ACCURACY vs. COST TRADEOFF:")
+    print(f"  Zero-shot accuracy: {zero_correct}/{total} ({int(zero_correct/total*100)}%)  →  ~{zero_misses:,} misclassifications/month")
+    print(f"  Few-shot accuracy:  {few_correct}/{total} ({int(few_correct/total*100)}%)  →  ~{few_misses:,} misclassifications/month")
+    print(f"  Accuracy gain:      +{accuracy_gain}%  for  +{cost_increase}% cost")
